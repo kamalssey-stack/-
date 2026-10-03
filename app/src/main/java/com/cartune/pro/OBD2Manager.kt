@@ -210,7 +210,7 @@ class OBD2Manager(private val context: Context) {
     fun disconnect() {
         isConnected = false
         pollingJob?.cancel()
-        try { socket?.close() } catch (_: IOException) {}
+        try { socket?.close() } catch (e: IOException) {}
         socket = null
         scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
     }
@@ -228,11 +228,11 @@ class OBD2Manager(private val context: Context) {
             val paired = adapter.bondedDevices ?: return emptyList()
             // Filter likely OBD2 devices by name
             paired.filter { d ->
-                val name = try { d.name?.uppercase() ?: "" } catch (_: SecurityException) { "" }
+                val name = try { d.name?.uppercase() ?: "" } catch (e: SecurityException) { "" }
                 name.contains("ELM") || name.contains("OBD") ||
                 name.contains("OBDII") || name.contains("VLINK") ||
                 name.contains("VEEPEAK") || name.contains("KONNWEI")
             }
-        } catch (_: Exception) { emptyList() }
+        } catch (e: Exception) { emptyList() }
     }
 }

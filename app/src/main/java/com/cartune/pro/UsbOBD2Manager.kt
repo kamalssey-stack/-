@@ -236,12 +236,19 @@ class UsbOBD2Manager(private val context: Context) {
         val sb = StringBuilder()
         val timeout = System.currentTimeMillis() + 1000
         while (System.currentTimeMillis() < timeout) {
-            val n = try { port.read(buf, 50) } catch (_: Exception) { break }
-            if (n > 0) {
-                val chunk = String(buf, 0, n)
-                sb.append(chunk)
-                if (chunk.contains('>')) break  // ELM327 prompt
+            val n = try {
+                port.read(buf, 50)
+            } catch (e: Exception) {
+                -1
             }
+            if (n <= 0) {
+                if (n == -1) break
+                Thread.sleep(5)
+                continue
+            }
+            val chunk = String(buf, 0, n)
+            sb.append(chunk)
+            if (chunk.contains('>')) break  // ELM327 prompt
         }
         return sb.toString().trim().replace(">", "").trim()
     }
@@ -253,7 +260,7 @@ class UsbOBD2Manager(private val context: Context) {
             if (parts.size >= 2 + count) {
                 Pair(parts[2].toInt(16), if (count >= 2 && parts.size >= 4) parts[3].toInt(16) else 0)
             } else null
-        } catch (_: Exception) { null }
+        } catch (e: Exception) { null }
     }
 
     // ─── Lifecycle ────────────────────────────────────────────
@@ -261,9 +268,9 @@ class UsbOBD2Manager(private val context: Context) {
     fun disconnect() {
         isConnected = false
         pollingJob?.cancel()
-        try { serialPort?.close() } catch (_: Exception) {}
+        try { serialPort?.close() } catch (e: Exception) {}
         serialPort = null
-        try { context.unregisterReceiver(permReceiver) } catch (_: Exception) {}
+        try { context.unregisterReceiver(permReceiver) } catch (e: Exception) {}
         scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
     }
 
