@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.CarTunePro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#00F0FF</item>
+        <item name="colorPrimaryVariant">#0077AA</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorSecondary">#FF4D00</item>
+        <item name="colorOnSecondary">#000000</item>
+        <item name="android:windowBackground">#0a0a0f</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

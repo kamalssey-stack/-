@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>CarTune Pro — Kia Soul Powertrain & Telemetry</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #030307;
+      --card-bg: rgba(14, 15, 26, 0.75);
+      --card-border: rgba(45, 48, 75, 0.4);
+      --cyan: #00f0ff;
+      --green: #00ff88;
+      --yellow: #ffd000;
+      --red: #ff2a55;
+      --orange: #ff6b35;
+      --purple: #b5179e;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 0%, #0d0f1e 0%, #030307 80%);
+      color: #f0f0f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* HUD Mirror Mode */
+    body.hud-mode { transform: scaleX(-1); background: #000 !important; }
+    body.hud-mode .no-hud { display: none !important; }
+
+    /* Top Bar Glass */
+    .top-bar {
+      background: rgba(8, 9, 16, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      background: rgba(6, 7, 13, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 13px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #62657e;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: var(--cyan);
+      background: linear-gradient(180deg, rgba(0, 240, 255, 0.02) 0%, rgba(0, 240, 255, 0.1) 100%);
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+    }
+
+    /* Shift Lights */
+    .shift-lights {
+      display: flex;
+      gap: 3px;
+      padding: 6px 14px;
+      background: #020204;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .s-led {
+      flex: 1;
+      height: 7px;
+      max-width: 24px;
+      border-radius: 2px;
+      background: #0e0f18;
+      transition: background 0.08s, box-shadow 0.08s;
+    }
+
+    /* Content Area */
+    .tab-content {
+      display: none;
+      padding: 14px;
+      flex: 1;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Glass Cards */
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      position: relative;
+      overflow: hidden;
+    }
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Circular Speedometer Arc */
+    .gauge-svg { transform: rotate(-90deg); }
+    .gauge-bg { stroke: #121320; stroke-width: 9; }
+    .gauge-progress {
+      stroke: var(--cyan);
+      stroke-width: 9;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.1s ease-out, stroke 0.3s;
+      filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.6));
+    }
+
+    /* Stopwatch Numbers */
+    .stopwatch-num {
+      font-size: 80px;
+      font-weight: 900;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -3px;
+      background: linear-gradient(180deg, #ffffff 45%, #9299b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Milestone Row */
+    .milestone-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      background: rgba(6, 7, 13, 0.6);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 7px;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .milestone-row.passed {
+      background: rgba(0, 255, 136, 0.08);
+      border-color: rgba(0, 255, 136, 0.35);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.15);
+      transform: scale(1.01);
+    }
+
+    /* Start Button */
+    .btn-start-run {
+      background: linear-gradient(135deg, #00d26a, #00ff88);
+      color: #030805;
+      font-weight: 900;
+      font-size: 15px;
+      letter-spacing: 1.5px;
+      border-radius: 14px;
+      padding: 18px 24px;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(0, 255, 136, 0.4);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-start-run:active { transform: scale(0.97); }
+    .btn-start-run.running {
+      background: linear-gradient(135deg, #d90429, #ff2a55);
+      color: #fff;
+      box-shadow: 0 0 30px rgba(255, 42, 85, 0.5);
+      animation: pulseBtn 1.5s infinite;
+    }
+    @keyframes pulseBtn {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 42, 85, 0.4); }
+      50% { box-shadow: 0 0 35px rgba(255, 42, 85, 0.8); }
+    }
+
+    /* Radar Pulse */
+    .radar-pulse {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulseRadar 1.6s infinite ease-out;
+    }
+    @keyframes pulseRadar {
+      0% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7); }
+      70% { box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+    }
+
+    /* Moving Road Animation */
+    .road-track {
+      height: 14px;
+      width: 100%;
+      background: repeating-linear-gradient(90deg, #18192a 0px, #18192a 20px, #00f0ff 20px, #00f0ff 40px);
+      background-size: 40px 100%;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+
+    /* Powertrain Flow Pulse */
+    @keyframes powerFlow {
+      0% { stroke-dashoffset: 100; }
+      100% { stroke-dashoffset: 0; }
+    }
+    .flow-line {
+      stroke-dasharray: 6 6;
+      animation: powerFlow 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════ TOP BAR ═══════════ -->
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🚘</span>
+      <div>
+        <div style="font-size:14px;font-weight:900;letter-spacing:1.8px;background:linear-gradient(90deg,#fff,var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">
+          KIA SOUL PRO
+        </div>
+        <div style="font-size:8px;color:#6f738e;letter-spacing:1.2px">
+          SATELLITE GPS & CAN-BUS POWERTRAIN
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px">
+      <span id="soulEngineBadge" style="font-size:9px;font-weight:900;padding:4px 10px;border-radius:8px;background:rgba(255,208,0,0.12);border:1px solid rgba(255,208,0,0.3);color:var(--yellow)">
+        1.6 MPI (123 HP)
+      </span>
+      <button onclick="toggleHUD()" style="padding:6px 11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:#0d0f1c;font-size:9px;font-weight:800;color:var(--cyan);cursor:pointer">
+        🪞 HUD
+      </button>
+      <div class="radar-pulse"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ F1 SHIFT LIGHTS ═══════════ -->
+  <div class="shift-lights" id="shiftLights"></div>
+
+  <!-- ═══════════ NAVIGATION TABS ═══════════ -->
+  <div class="tab-bar no-hud">
+    <div class="tab-btn active" onclick="switchTab('drag')">
+      <span>⏱️</span>
+      <span>0-100 ДРАГ</span>
+    </div>
+    <div class="tab-btn" onclick="switchTab('xray')">
+      <span>🔬</span>
+      <span>КАРКАС KIA</span>
+    </div>
+    <div class="tab-btn" onclick="switchTab('cockpit')">
+      <span>🏎️</span>
+      <span>ПРИБОРЫ</span>
+    </div>
+    <div class="tab-btn" onclick="switchTab('engine')">
+      <span>⚙️</span>
+      <span>МОТОР</span>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════
+       TAB 1: 0-100 ДРАГ (ЗАМЕРЫ GPS)
+  ═════════════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-drag">
+    <div class="glass-card" style="text-align:center;padding:24px 16px">
+      <div id="dragStatusBanner" style="display:inline-block;font-size:11px;font-weight:900;letter-spacing:1.5px;color:#8589a8;padding:6px 16px;border-radius:20px;background:rgba(4,5,10,0.7);border:1px solid rgba(255,255,255,0.06);margin-bottom:14px">
+        НАЖМИ СТАРТ И НАЧИНАЙ РАЗГОН
+      </div>
+
+      <!-- Speed Arc & Counter -->
+      <div style="position:relative;width:210px;height:210px;margin:0 auto 10px">
+        <svg class="gauge-svg" width="210" height="210" viewBox="0 0 210 210">
+          <circle class="gauge-bg" cx="105" cy="105" r="92" fill="none"/>
+          <circle id="gaugeArc" class="gauge-progress" cx="105" cy="105" r="92" fill="none" stroke-dasharray="578" stroke-dashoffset="578"/>
+        </svg>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+          <div id="dragRealSpeed" style="font-size:62px;font-weight:900;line-height:0.9;font-variant-numeric:tabular-nums;color:#fff;letter-spacing:-2px">0</div>
+          <div style="font-size:11px;font-weight:900;letter-spacing:2px;color:#6f738e;margin-top:4px">КМ / Ч</div>
+          <div id="gForceMini" style="font-size:10px;font-weight:800;color:var(--orange);margin-top:2px">+0.00 G</div>
+        </div>
+      </div>
+
+      <div style="font-size:10px;color:#6f738e;font-weight:800;letter-spacing:1.5px;margin-bottom:2px">СЕКУНДОМЕР ЗАМЕРА</div>
+      <div id="dragTimerVal" class="stopwatch-num">0.00</div>
+      <div style="font-size:10px;color:#555;letter-spacing:2px">СЕКУНД</div>
+
+      <div style="display:flex;gap:12px;margin-top:22px">
+        <button id="btnMainStart" class="btn-start-run" onclick="toggleStartRace()" style="flex:3">
+          <span style="font-size:18px">▶</span>
+          <span>СТАРТ ЗАМЕРА</span>
+        </button>
+        <button onclick="resetRace()" style="flex:1;padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);background:rgba(12,14,24,0.8);color:#9296b0;font-weight:800;font-size:12px;letter-spacing:1px;cursor:pointer">
+          СБРОС
+        </button>
+      </div>
+    </div>
+
+    <!-- Milestones -->
+    <div class="glass-card">
+      <div class="card-title">
+        <span style="color:#aaa">🏁 ОТСЕЧКИ РАЗГОНА KIA SOUL</span>
+        <span id="finishBadge" style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:6px;background:rgba(255,208,0,0.1);color:var(--yellow)">ПАСПОРТ: 11.2 с</span>
+      </div>
+      <div>
+        <div class="milestone-row" id="row050">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#fff">0 — 50 км/ч</div>
+            <div style="font-size:9px;color:#6f738e">Городской светофорный старт</div>
+          </div>
+          <div id="res050" style="font-size:18px;font-weight:900;color:var(--cyan);font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div class="milestone-row" id="row50100">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#fff">50 — 100 км/ч</div>
+            <div style="font-size:9px;color:#6f738e">Эластичность при обгоне</div>
+          </div>
+          <div id="res50100" style="font-size:18px;font-weight:900;color:var(--yellow);font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div class="milestone-row" id="row0100">
+          <div>
+            <div style="font-size:14px;font-weight:900;color:#fff">0 — 100 км/ч (Полный разгон)</div>
+            <div id="resDiff" style="font-size:9px;color:#6f738e">Сравнение с паспортом Kia Soul</div>
+          </div>
+          <div id="res0100" style="font-size:22px;font-weight:900;color:var(--green);font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div class="milestone-row">
+          <div>
+            <div style="font-size:12px;font-weight:800;color:#fff">Дистанция разгона</div>
+            <div style="font-size:9px;color:#6f738e">Пройдено метров до 100 км/ч</div>
+          </div>
+          <div id="resDist" style="font-size:16px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════
+       TAB 2: 🔬 КАРКАС KIA SOUL, КОЛЕНВАЛ И ТРАНСМИССИЯ
+  ═════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-xray">
+
+    <!-- Interactive Cutaway Card -->
+    <div class="glass-card" style="padding:18px 12px;text-align:center">
+      <div class="card-title">
+        <span style="color:var(--cyan)">🔬 КАРКАС KIA SOUL: ДВИЖЕНИЕ И ПРИВОД</span>
+        <span id="xrayGearBadge" style="font-size:9px;font-weight:900;padding:2px 8px;border-radius:6px;background:rgba(0,240,255,0.1);color:var(--cyan)">6-АКПП: 2-Я ПЕРЕДАЧА</span>
+      </div>
+
+      <!-- Cutaway Visual Container -->
+      <div style="position:relative;width:100%;max-width:360px;margin:0 auto;background:#05060d;border-radius:14px;padding:12px 6px;border:1px solid rgba(255,255,255,0.06);overflow:hidden">
+        <!-- SVG Kia Soul Silhouette & Mechanical Cutaway -->
+        <svg viewBox="0 0 340 180" width="100%" height="auto" style="display:block">
+          <!-- Road Line -->
+          <line x1="0" y1="165" x2="340" y2="165" stroke="#252840" stroke-width="3"/>
+
+          <!-- Kia Soul Boxy Body Chassis Wireframe -->
+          <path d="M 35 140 L 70 140 L 80 85 L 140 65 L 250 65 L 295 85 L 305 140 L 330 140" fill="none" stroke="#2a3055" stroke-width="2.5"/>
+          <path d="M 80 85 L 135 68 L 245 68 L 290 85 Z" fill="rgba(0, 240, 255, 0.03)" stroke="var(--cyan)" stroke-width="1.5" opacity="0.6"/>
+          <!-- Kia Soul Characteristic Boxy Rear and Floating Roof Pillar -->
+          <path d="M 45 138 L 45 95 L 75 90" fill="none" stroke="#363c6c" stroke-width="2"/>
+          <path d="M 285 90 L 295 135" fill="none" stroke="#363c6c" stroke-width="2"/>
+
+          <!-- Exhaust System along underbody -->
+          <path d="M 235 125 L 200 145 L 80 145 L 40 145" fill="none" stroke="#ff5500" stroke-width="2.5" opacity="0.8"/>
+          <!-- Exhaust Pulses -->
+          <circle id="exhPulse1" cx="190" cy="145" r="3" fill="#ff5500"/>
+          <circle id="exhPulse2" cx="120" cy="145" r="3" fill="#ff5500"/>
+          <circle id="exhPulse3" cx="50" cy="145" r="4" fill="#ff3300"/>
+
+          <!-- Front Wheel (Driven Front Axle FWD) -->
+          <g transform="translate(255, 142)">
+            <circle cx="0" cy="0" r="23" fill="#080912" stroke="#2f355c" stroke-width="3"/>
+            <circle cx="0" cy="0" r="16" fill="#101222" stroke="var(--cyan)" stroke-width="1.5"/>
+            <!-- Rotating Rim Spokes -->
+            <g id="frontRimSpokes">
+              <line x1="-14" y1="0" x2="14" y2="0" stroke="#fff" stroke-width="2"/>
+              <line x1="0" y1="-14" x2="0" y2="14" stroke="#fff" stroke-width="2"/>
+              <line x1="-10" y1="-10" x2="10" y2="10" stroke="#fff" stroke-width="2"/>
+              <line x1="-10" y1="10" x2="10" y2="-10" stroke="#fff" stroke-width="2"/>
+            </g>
+            <circle cx="0" cy="0" r="5" fill="var(--cyan)"/>
+          </g>
+
+          <!-- Rear Wheel -->
+          <g transform="translate(85, 142)">
+            <circle cx="0" cy="0" r="23" fill="#080912" stroke="#2f355c" stroke-width="3"/>
+            <circle cx="0" cy="0" r="16" fill="#101222" stroke="#444b7a" stroke-width="1.5"/>
+            <g id="rearRimSpokes">
+              <line x1="-14" y1="0" x2="14" y2="0" stroke="#888" stroke-width="2"/>
+              <line x1="0" y1="-14" x2="0" y2="14" stroke="#888" stroke-width="2"/>
+              <line x1="-10" y1="-10" x2="10" y2="10" stroke="#888" stroke-width="2"/>
+              <line x1="-10" y1="10" x2="10" y2="-10" stroke="#888" stroke-width="2"/>
+            </g>
+            <circle cx="0" cy="0" r="5" fill="#666"/>
+          </g>
+
+          <!-- Transverse 4-Cylinder Engine Block Under Hood -->
+          <rect x="220" y="88" width="44" height="38" rx="4" fill="rgba(0, 240, 255, 0.08)" stroke="var(--cyan)" stroke-width="1.5"/>
+          <text x="242" y="99" fill="var(--cyan)" font-size="7" font-weight="900" text-anchor="middle">KIA MPI</text>
+
+          <!-- Transmission Box (6-АКПП) -->
+          <rect x="200" y="105" width="22" height="26" rx="3" fill="rgba(255, 208, 0, 0.08)" stroke="var(--yellow)" stroke-width="1.5"/>
+          <text x="211" y="120" fill="var(--yellow)" font-size="6" font-weight="900" text-anchor="middle">6-АКПП</text>
+
+          <!-- Power Flow Arrows (Pulsing Energy Stream to Front Wheels) -->
+          <path d="M 235 118 L 215 118 L 215 132 L 255 142" fill="none" stroke="var(--green)" stroke-width="2.5" class="flow-line"/>
+        </svg>
+
+        <!-- Moving Road Lines Simulator -->
+        <div class="road-track" id="roadMovingTrack"></div>
+      </div>
+
+      <!-- Real-Time Engine & Crankshaft Canvas Simulation -->
+      <div style="margin-top:14px">
+        <div class="card-title">
+          <span style="color:var(--yellow)">⚙️ КОЛЕНВАЛ И 4 ПОРШНЯ (MPI 16V)</span>
+          <span id="xrayRpmBadge" style="font-size:11px;font-weight:900;color:var(--cyan)">2 400 RPM</span>
+        </div>
+        <canvas id="engineCanvas" width="320" height="110" style="display:block;margin:0 auto;border-radius:10px;background:#05060d;border:1px solid rgba(255,255,255,0.06)"></canvas>
+      </div>
+
+      <!-- Power Transfer Flow Explanations -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:left">
+        <div style="background:rgba(6,7,13,0.6);padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04)">
+          <div style="font-size:9px;font-weight:800;color:var(--cyan)">1. КОЛЕНВАЛ (КШМ)</div>
+          <div style="font-size:8px;color:#8589a8;line-height:1.4;margin-top:2px">
+            Вспышки топлива толкают 4 поршня (порядок 1-3-4-2), коленвал преобразует ход во вращение.
+          </div>
+        </div>
+        <div style="background:rgba(6,7,13,0.6);padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04)">
+          <div style="font-size:9px;font-weight:800;color:var(--yellow)">2. 6-СТУПЕНЧАТАЯ АКПП</div>
+          <div style="font-size:8px;color:#8589a8;line-height:1.4;margin-top:2px">
+            Гидротрансформатор сглаживает рывки и передаёт момент на дифференциал и передние колёса.
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Speed Slider for In-App Testing -->
+      <div style="margin-top:14px;background:rgba(6,7,13,0.6);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#aaa;margin-bottom:6px">
+          <span>СКОРОСТЬ ТЕСТА / РЕАЛЬНАЯ</span>
+          <span id="sliderSpeedDisp" style="color:var(--cyan)">60 КМ/Ч</span>
+        </div>
+        <input type="range" id="simSpeedSlider" min="0" max="160" value="60" oninput="onSpeedSliderChange(this.value)" style="width:100%;accent-color:var(--cyan);cursor:pointer"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════
+       TAB 3: ПРИБОРЫ (G-FORCE КРУГ + КРУПНЫЙ СПИДОМЕТР)
+  ═════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-cockpit">
+    <div class="glass-card" style="text-align:center;padding:26px 14px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:2px;color:#6f738e">ТОЧНАЯ СПУТНИКОВАЯ СКОРОСТЬ GPS</div>
+      <div id="cockpitSpeed" style="font-size:92px;font-weight:900;color:#fff;line-height:0.95;font-variant-numeric:tabular-nums;margin:12px 0;letter-spacing:-3px">
+        0
+      </div>
+      <div style="font-size:13px;font-weight:900;letter-spacing:3px;color:#6f738e">КМ / Ч</div>
+    </div>
+
+    <!-- G-Force Circle -->
+    <div class="glass-card" style="text-align:center">
+      <div class="card-title">
+        <span style="color:#aaa">🎯 КРУГ ПЕРЕГРУЗОК G-FORCE</span>
+        <span id="gForceDigital" style="font-size:12px;font-weight:900;color:var(--orange)">+0.00 G</span>
+      </div>
+      <div class="g-circle-wrap" style="position:relative;width:140px;height:140px;margin:0 auto;border-radius:50%;background:#06070c;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:95px;height:95px;border-radius:50%;border:1px dashed rgba(255,255,255,0.08)"></div>
+        <div style="position:absolute;width:45px;height:45px;border-radius:50%;border:1px dashed rgba(255,255,255,0.08)"></div>
+        <div class="g-ball" id="gBall" style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 15px var(--cyan);border:2px solid var(--cyan)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════
+       TAB 4: ВЫБОР МОТОРА KIA SOUL
+  ═════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-engine">
+    <div class="glass-card">
+      <div class="card-title">
+        <span style="color:var(--yellow)">🚘 ВЫБЕРИ ДВИГАТЕЛЬ СВОЕЙ KIA SOUL</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <div class="pill active" id="eng16" onclick="selectSoulEngine('1.6')" style="flex:1;min-width:calc(33% - 8px);padding:12px 8px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(8,9,16,0.7);color:#6f738e;font-size:11px;font-weight:800;text-align:center;cursor:pointer">
+          1.6 MPI (123 HP)<br/><span style="font-size:9px;color:#8f94b2">Паспорт: 11.2 с</span>
+        </div>
+        <div class="pill" id="eng20" onclick="selectSoulEngine('2.0')" style="flex:1;min-width:calc(33% - 8px);padding:12px 8px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(8,9,16,0.7);color:#6f738e;font-size:11px;font-weight:800;text-align:center;cursor:pointer">
+          2.0 MPI (150 HP)<br/><span style="font-size:9px;color:#8f94b2">Паспорт: 10.2 с</span>
+        </div>
+        <div class="pill" id="engTurbo" onclick="selectSoulEngine('Turbo')" style="flex:1;min-width:calc(33% - 8px);padding:12px 8px;border-radius:12px;border:1px solid rgba(255,255,255,0.06);background:rgba(8,9,16,0.7);color:#6f738e;font-size:11px;font-weight:800;text-align:center;cursor:pointer">
+          1.6 T-GDI (204 HP)<br/><span style="font-size:9px;color:#8f94b2">Паспорт: 7.8 с</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TOAST ═══════════ -->
+  <div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:linear-gradient(135deg,rgba(0,26,46,0.95),rgba(0,42,74,0.95));backdrop-filter:blur(12px);border:1px solid var(--cyan);border-radius:12px;padding:12px 24px;font-size:12px;font-weight:900;letter-spacing:1.5px;color:var(--cyan);box-shadow:0 0 25px rgba(0,240,255,0.4);transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);opacity:0;z-index:9999;white-space:nowrap">
+    ✅ ГОТОВО
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════
+       JAVASCRIPT: ENGINE & CRANKSHAFT CANVAS SIMULATOR
+  ═════════════════════════════════════════════════════ -->
+  <script>
+    const state = {
+      speed: 0,
+      simSpeed: 60,
+      rpm: 2400,
+      gear: 2,
+      gForce: 0,
+      accuracy: 0,
+      altitude: 0,
+
+      // Stopwatch state
+      isRaceRunning: false,
+      raceStartTime: 0,
+      lastUpdateTime: 0,
+      distMeters: 0,
+
+      // Real checkpoints
+      t50: null,
+      t100: null,
+      t50100: null,
+
+      // Kia Soul settings
+      soulEngine: '1.6',
+      factoryTime100: 11.2,
+      crankAngle: 0,
+      wheelAngle: 0,
+      roadOffset: 0
+    };
+
+    let timerTicker = null;
+
+    // ─── SHIFT LIGHTS WITH STARTUP SWEEP ───
+    function buildShiftLights() {
+      const c = document.getElementById('shiftLights');
+      c.innerHTML = '';
+      for (let i = 0; i < 15; i++) {
+        const led = document.createElement('div');
+        led.className = 's-led';
+        led.id = 'led' + i;
+        c.appendChild(led);
+      }
+      runStartupLedSweep();
+    }
+
+    function runStartupLedSweep() {
+      for (let i = 0; i < 15; i++) {
+        setTimeout(() => {
+          const el = document.getElementById('led' + i);
+          if (el) {
+            el.style.background = i < 6 ? '#00ff88' : i < 11 ? '#ffd000' : '#ff2a55';
+            el.style.boxShadow = '0 0 8px ' + el.style.background;
+          }
+        }, i * 35);
+      }
+      setTimeout(() => {
+        for (let i = 0; i < 15; i++) {
+          setTimeout(() => {
+            const el = document.getElementById('led' + (14 - i));
+            if (el) {
+              el.style.background = '#0e0f18';
+              el.style.boxShadow = 'none';
+            }
+          }, i * 25);
+        }
+      }, 700);
+    }
+
+    function updateShiftLights(speed) {
+      const pct = Math.max(0, Math.min(1, speed / 105));
+      const activeCount = Math.round(pct * 15);
+
+      for (let i = 0; i < 15; i++) {
+        const el = document.getElementById('led' + i);
+        if (!el) continue;
+        if (i < activeCount) {
+          let col = '#00ff88';
+          if (i >= 6 && i < 11) col = '#ffd000';
+          if (i >= 11) col = '#ff2a55';
+          el.style.background = col;
+          el.style.boxShadow = `0 0 8px ${col}`;
+        } else {
+          el.style.background = '#0e0f18';
+          el.style.boxShadow = 'none';
+        }
+      }
+    }
+
+    // ─── SVG SPEEDOMETER ARC ───
+    function updateSpeedGauge(speed) {
+      const maxSpeed = 160;
+      const pct = Math.max(0, Math.min(1, speed / maxSpeed));
+      const circumference = 578;
+      const offset = circumference - (pct * circumference);
+      const arc = document.getElementById('gaugeArc');
+      if (arc) {
+        arc.style.strokeDashoffset = offset;
+        if (speed >= 100) arc.style.stroke = 'var(--red)';
+        else if (speed >= 50) arc.style.stroke = 'var(--green)';
+        else arc.style.stroke = 'var(--cyan)';
+      }
+    }
+
+    // ─── ENGINE CANVAS (4 PISTONS & SPINNING CRANKSHAFT) ───
+    function renderEngineCanvas() {
+      const cvs = document.getElementById('engineCanvas');
+      if (!cvs) return;
+      const ctx = cvs.getContext('2d');
+      const w = cvs.width, h = cvs.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Crankshaft parameters
+      const crankY = 82;
+      const crankRadius = 14;
+      const conRodLength = 36;
+      const pistonWidth = 26;
+      const pistonHeight = 16;
+      const cylSpacing = 68;
+      const startX = 58;
+
+      // Draw Crankcase Block Outline
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(startX - 20, 10, cylSpacing * 3 + 40, 92);
+
+      // Kia 4-cyl firing order offsets: 1, 3, 4, 2 (angles: 0, 180, 180, 0)
+      const pistonAngles = [
+        state.crankAngle,
+        state.crankAngle + Math.PI,
+        state.crankAngle + Math.PI,
+        state.crankAngle
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const cx = startX + (i * cylSpacing);
+        const theta = pistonAngles[i];
+
+        // Crankpin position (rotating journal)
+        const pinX = cx + Math.sin(theta) * crankRadius;
+        const pinY = crankY - Math.cos(theta) * crankRadius;
+
+        // Piston position via slider-crank trigonometry
+        const pistonY = pinY - Math.sqrt(conRodLength * conRodLength - Math.pow(pinX - cx, 2));
+
+        // Draw Cylinder Sleeve Walls
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 15, 14); ctx.lineTo(cx - 15, 65);
+        ctx.moveTo(cx + 15, 14); ctx.lineTo(cx + 15, 65);
+        ctx.stroke();
+
+        // Draw Connecting Rod (Шатун)
+        ctx.strokeStyle = '#8589a8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(pinX, pinY);
+        ctx.lineTo(cx, pistonY + (pistonHeight / 2));
+        ctx.stroke();
+
+        // Draw Rotating Crankshaft Counterweight (Коленвал)
+        ctx.strokeStyle = 'var(--yellow)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(cx, crankY, 6, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'var(--cyan)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, crankY);
+        ctx.lineTo(pinX, pinY);
+        ctx.stroke();
+
+        // Draw Piston Head (Поршень)
+        const isFiring = Math.cos(theta) > 0.85;
+        ctx.fillStyle = isFiring ? 'rgba(255, 107, 53, 0.85)' : '#1a1d30';
+        ctx.strokeStyle = isFiring ? 'var(--orange)' : 'var(--cyan)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(cx - (pistonWidth / 2), pistonY, pistonWidth, pistonHeight, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Cylinder Label
+        ctx.fillStyle = '#6f738e';
+        ctx.font = '8px sans-serif';
+        ctx.fillText('CYL ' + (i + 1), cx - 10, 100);
+      }
+    }
+
+    // ─── LIVE POWERTRAIN ANIMATION LOOP (60 FPS) ───
+    let lastAnimTime = performance.now();
+    function animatePowertrain(now) {
+      const dt = (now - lastAnimTime) / 1000;
+      lastAnimTime = now;
+
+      // Active speed: real GPS speed if moving, else test slider speed
+      const curSpeed = state.speed > 0 ? state.speed : state.simSpeed;
+
+      // Calculate Gear & RPM based on Kia 6-speed ratios
+      if (curSpeed < 1) { state.gear = 1; state.rpm = 850; }
+      else if (curSpeed < 35) { state.gear = 1; state.rpm = Math.min(6200, 1000 + curSpeed * 140); }
+      else if (curSpeed < 65) { state.gear = 2; state.rpm = Math.min(6200, 1200 + (curSpeed - 35) * 110); }
+      else if (curSpeed < 95) { state.gear = 3; state.rpm = Math.min(6200, 1500 + (curSpeed - 65) * 85); }
+      else if (curSpeed < 130) { state.gear = 4; state.rpm = Math.min(6200, 1800 + (curSpeed - 95) * 65); }
+      else { state.gear = 5; state.rpm = Math.min(6200, 2000 + (curSpeed - 130) * 55); }
+
+      // Update Crankshaft Rotation Angle based on RPM
+      const crankSpeedRads = (state.rpm / 60) * Math.PI * 2;
+      state.crankAngle = (state.crankAngle + crankSpeedRads * dt) % (Math.PI * 2);
+
+      // Rotate Wheel Rims
+      const wheelRotation = (curSpeed / 3.6 / 0.31) * dt; // Rads per sec
+      state.wheelAngle = (state.wheelAngle + wheelRotation * 57.3) % 360;
+
+      const fRim = document.getElementById('frontRimSpokes');
+      const rRim = document.getElementById('rearRimSpokes');
+      if (fRim) fRim.setAttribute('transform', `rotate(${state.wheelAngle})`);
+      if (rRim) rRim.setAttribute('transform', `rotate(${state.wheelAngle})`);
+
+      // Moving road offset
+      state.roadOffset = (state.roadOffset - (curSpeed * 4 * dt)) % 40;
+      const road = document.getElementById('roadMovingTrack');
+      if (road) road.style.backgroundPositionX = state.roadOffset + 'px';
+
+      // Update text badges
+      const rpmBadge = document.getElementById('xrayRpmBadge');
+      const gearBadge = document.getElementById('xrayGearBadge');
+      if (rpmBadge) rpmBadge.textContent = Math.round(state.rpm).toLocaleString() + ' RPM';
+      if (gearBadge) gearBadge.textContent = '6-АКПП: ' + state.gear + '-Я ПЕРЕДАЧА';
+
+      renderEngineCanvas();
+      requestAnimationFrame(animatePowertrain);
+    }
+
+    function onSpeedSliderChange(val) {
+      state.simSpeed = parseInt(val);
+      document.getElementById('sliderSpeedDisp').textContent = val + ' КМ/Ч';
+      if (state.speed === 0) {
+        updateSpeedGauge(state.simSpeed);
+        updateShiftLights(state.simSpeed);
+      }
+    }
+
+    // ─── START / STOP / RESET RACE ───
+    function toggleStartRace() {
+      if (!state.isRaceRunning) {
+        state.isRaceRunning = true;
+        state.raceStartTime = performance.now();
+        state.lastUpdateTime = state.raceStartTime;
+        state.distMeters = 0;
+        state.t50 = null;
+        state.t100 = null;
+        state.t50100 = null;
+
+        ['row050', 'row50100', 'row0100'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('passed');
+        });
+
+        document.getElementById('res050').textContent = '—';
+        document.getElementById('res50100').textContent = '—';
+        document.getElementById('res0100').textContent = '—';
+        document.getElementById('resDiff').textContent = 'Сравнение с паспортом Kia Soul';
+        document.getElementById('resDist').textContent = '—';
+
+        const btn = document.getElementById('btnMainStart');
+        btn.classList.add('running');
+        btn.innerHTML = '<span>⏹️</span><span>ОСТАНОВИТЬ ЗАМЕР</span>';
+
+        const banner = document.getElementById('dragStatusBanner');
+        banner.textContent = '⚡ ЗАМЕР ИДЁТ! ДАВИ ГАЗ В KIA SOUL!';
+        banner.style.color = 'var(--green)';
+
+        clearInterval(timerTicker);
+        timerTicker = setInterval(() => {
+          if (state.isRaceRunning) {
+            const elapsed = (performance.now() - state.raceStartTime) / 1000;
+            document.getElementById('dragTimerVal').textContent = elapsed.toFixed(2);
+          }
+        }, 30);
+      } else {
+        stopRace();
+      }
+    }
+
+    function stopRace() {
+      state.isRaceRunning = false;
+      clearInterval(timerTicker);
+
+      const btn = document.getElementById('btnMainStart');
+      btn.classList.remove('running');
+      btn.innerHTML = '<span style="font-size:18px">▶</span><span>СТАРТ ЗАМЕРА</span>';
+
+      const banner = document.getElementById('dragStatusBanner');
+      banner.textContent = 'ЗАМЕР ОСТАНОВЛЕН';
+      banner.style.color = '#8589a8';
+    }
+
+    function resetRace() {
+      stopRace();
+      state.raceStartTime = 0;
+      state.distMeters = 0;
+      state.t50 = null;
+      state.t100 = null;
+      state.t50100 = null;
+
+      ['row050', 'row50100', 'row0100'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('passed');
+      });
+
+      document.getElementById('dragTimerVal').textContent = '0.00';
+      document.getElementById('dragStatusBanner').textContent = 'НАЖМИ СТАРТ И НАЧИНАЙ РАЗГОН';
+      document.getElementById('dragStatusBanner').style.color = '#8589a8';
+      document.getElementById('res050').textContent = '—';
+      document.getElementById('res50100').textContent = '—';
+      document.getElementById('res0100').textContent = '—';
+      document.getElementById('resDiff').textContent = 'Сравнение с паспортом Kia Soul';
+      document.getElementById('resDist').textContent = '—';
+    }
+
+    // ─── REAL GPS SPEED DISPATCHER (FROM ANDROID GPS SAT) ───
+    window.updateGPSSpeed = function(speedKmh, accuracy, altitude) {
+      state.speed = Math.max(0, Math.round(speedKmh));
+      state.accuracy = accuracy || 0;
+      state.altitude = Math.round(altitude || 0);
+
+      const now = performance.now();
+
+      if (state.isRaceRunning && state.raceStartTime > 0) {
+        const elapsed = (now - state.raceStartTime) / 1000;
+
+        if (state.lastUpdateTime > 0) {
+          const dt = (now - state.lastUpdateTime) / 1000;
+          state.distMeters += (state.speed / 3.6) * dt;
+          document.getElementById('resDist').textContent = Math.round(state.distMeters) + ' м';
+        }
+
+        // Checkpoint: 0 — 50 км/ч
+        if (state.speed >= 50 && state.t50 === null) {
+          state.t50 = elapsed;
+          document.getElementById('res050').textContent = elapsed.toFixed(2) + ' с';
+          document.getElementById('row050').classList.add('passed');
+        }
+
+        // Checkpoint: 0 — 100 км/ч (FINISH TARGET)
+        if (state.speed >= 100 && state.t100 === null) {
+          state.t100 = elapsed;
+          document.getElementById('res0100').textContent = elapsed.toFixed(2) + ' с';
+          document.getElementById('row0100').classList.add('passed');
+
+          if (state.t50 !== null) {
+            state.t50100 = state.t100 - state.t50;
+            document.getElementById('res50100').textContent = state.t50100.toFixed(2) + ' с';
+            document.getElementById('row50100').classList.add('passed');
+          }
+
+          const diff = (state.t100 - state.factoryTime100).toFixed(2);
+          const diffEl = document.getElementById('resDiff');
+          if (diff <= 0) {
+            diffEl.textContent = diff + ' с (Быстрее завода!)';
+            diffEl.style.color = 'var(--green)';
+          } else {
+            diffEl.textContent = '+' + diff + ' с (Медленнее завода)';
+            diffEl.style.color = 'var(--yellow)';
+          }
+
+          showToast('🏆 KIA SOUL 0-100: ' + elapsed.toFixed(2) + ' СЕК!');
+          stopRace();
+        }
+      }
+
+      state.lastUpdateTime = now;
+
+      document.getElementById('dragRealSpeed').textContent = state.speed;
+      document.getElementById('cockpitSpeed').textContent = state.speed;
+      document.getElementById('teleAccuracy').textContent = '± ' + state.accuracy.toFixed(1) + ' м';
+      document.getElementById('teleAltitude').textContent = state.altitude + ' м';
+
+      updateShiftLights(state.speed);
+      updateSpeedGauge(state.speed);
+    };
+
+    function selectSoulEngine(type) {
+      state.soulEngine = type;
+      ['eng16', 'eng20', 'engTurbo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+      });
+
+      const badge = document.getElementById('soulEngineBadge');
+      const finishBadge = document.getElementById('finishBadge');
+
+      if (type === '1.6') {
+        document.getElementById('eng16').classList.add('active');
+        state.factoryTime100 = 11.2;
+        badge.textContent = '1.6 MPI (123 HP)';
+        finishBadge.textContent = 'ПАСПОРТ: 11.2 с';
+      } else if (type === '2.0') {
+        document.getElementById('eng20').classList.add('active');
+        state.factoryTime100 = 10.2;
+        badge.textContent = '2.0 MPI (150 HP)';
+        finishBadge.textContent = 'ПАСПОРТ: 10.2 с';
+      } else if (type === 'Turbo') {
+        document.getElementById('engTurbo').classList.add('active');
+        state.factoryTime100 = 7.8;
+        badge.textContent = '1.6 T-GDI (204 HP)';
+        finishBadge.textContent = 'ПАСПОРТ: 7.8 с';
+      }
+      showToast('🚘 ВЫБРАН: ' + badge.textContent);
+    }
+
+    function switchTab(name) {
+      ['drag', 'xray', 'cockpit', 'engine'].forEach((t, i) => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.classList.toggle('active', t === name);
+        const btns = document.querySelectorAll('.tab-btn');
+        if (btns[i]) btns[i].classList.toggle('active', t === name);
+      });
+    }
+
+    function toggleHUD() {
+      document.body.classList.toggle('hud-mode');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.transform = 'translateX(-50%) translateY(0)';
+      t.style.opacity = '1';
+      setTimeout(() => {
+        t.style.transform = 'translateX(-50%) translateY(80px)';
+        t.style.opacity = '0';
+      }, 2400);
+    }
+
+    window.addEventListener('load', () => {
+      buildShiftLights();
+      requestAnimationFrame(animatePowertrain);
+      updateSpeedGauge(0);
+    });
+  </script>
+</body>
+</html>
